@@ -1,0 +1,5 @@
+{
+    "precision": 32,
+    "progress_bar_refresh_rate": 1,
+    "batch_size": 16
+}
