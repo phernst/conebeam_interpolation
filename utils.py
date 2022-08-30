@@ -1,6 +1,6 @@
 import json
-import os
 
+import h5py
 import nibabel as nib
 
 
@@ -9,20 +9,12 @@ def load_nib(path: str):
 
 
 def load_normalizations():
-    with open('normalization.json', 'r') as file:
+    with open('normalization.json', 'r', encoding='utf-8') as file:
         return json.load(file)
 
 
-def load_data_dirs():
-    with open('data_dirs.json', 'r') as file:
-        return {k: os.path.abspath(v) for (k, v) in json.load(file).items()}
-
-
-def load_configuration():
-    with open('configuration.json', 'r') as file:
-        return json.load(file)
+def load_h5(path: str):
+    return h5py.File(path, 'r', libver='latest', swmr=True)['projections']
 
 
 NORMALIZATION = load_normalizations()
-DATA_DIRS = load_data_dirs()
-CONFIGURATION = load_configuration()

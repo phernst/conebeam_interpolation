@@ -4,13 +4,18 @@ from typing import Optional
 
 import numpy as np
 from skimage.metrics import structural_similarity
+import torch.nn.functional as F
 
-from utils import DATA_DIRS, load_nib
+from utils import load_nib
 
 
 # average over first dimension:
 #   projections: [lambda, u, v]
 #   reconstructions: [z, x, y]
+
+
+def rmse(prediction, target):
+    return F.mse_loss(prediction, target).sqrt()
 
 
 def nmse(prediction, target, reduce=np.mean):
@@ -36,12 +41,12 @@ def ssim(prediction, target, reduce=np.mean):
 def nd2str(neighbor_diff: int):
     if neighbor_diff == 1:
         return 'nd1'
-    elif neighbor_diff == 2:
+    if neighbor_diff == 2:
         return 'nd2_nd1'
-    elif neighbor_diff == 4:
+    if neighbor_diff == 4:
         return 'nd4_nd2_nd1'
-    else:
-        raise NotImplementedError()
+
+    raise NotImplementedError()
 
 
 # TODO: update nib filenames

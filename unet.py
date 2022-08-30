@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 class UNet(nn.Module):
     def __init__(self, in_channels=1, n_classes=1, depth=4, wf=6, padding=True,
-                 batch_norm=True, up_mode='upsample'):
+                 batch_norm=True, up_mode='upconv'):
         """
         Implementation of
         U-Net: Convolutional Networks for Biomedical Image Segmentation
@@ -72,13 +72,13 @@ class UNetConvBlock(nn.Module):
 
         block.append(nn.Conv2d(in_size, out_size, kernel_size=3,
                                padding=int(padding)))
-        block.append(nn.ReLU())
+        block.append(nn.LeakyReLU())
         if batch_norm:
             block.append(nn.BatchNorm2d(out_size))
 
         block.append(nn.Conv2d(out_size, out_size, kernel_size=3,
                                padding=int(padding)))
-        block.append(nn.ReLU())
+        block.append(nn.LeakyReLU())
         if batch_norm:
             block.append(nn.BatchNorm2d(out_size))
 
@@ -106,6 +106,7 @@ class UNetUpBlock(nn.Module):
 
         self.conv_block = UNetConvBlock(in_size, out_size, padding, batch_norm)
 
+    @staticmethod
     def center_crop(layer, target_size):
         _, _, layer_height, layer_width = layer.size()
         diff_y = (layer_height - target_size[0]) // 2

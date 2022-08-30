@@ -1,53 +1,49 @@
 import os
 from os.path import join as pjoin
 
-import ctl
-import ctl.gui
+import h5py
 import nibabel as nib
-import numpy as np
+import torch
+from torch_radon import ConeBeam
+from torch_radon.volumes import Volume3D
+from tqdm import tqdm
 
-from utils import DATA_DIRS
-
-
-def create_system():
-    system = ctl.SimpleCTSystem(
-        detector=ctl.FlatPanelDetector((256, 256), (4.0, 4.0)),
-        gantry=ctl.TubularGantry(1000, 750),
-        source=ctl.XrayTube(),
-    )
-    assert system.is_valid()
-    return system
+from ct_utils import hu2mu, create_radon
 
 
-def create_projections(system: ctl.SimpleCTSystem,
+def create_projections(radon: ConeBeam,
                        path_to_nifti: str,
                        projections_path: str):
     nib_volume = nib.load(path_to_nifti)
-    nib_dims = tuple([float(f) for f in nib_volume.header['pixdim'][1:4]])
-    nib_volume = nib_volume.get_fdata()
-    volume = ctl.VoxelVolumeF.from_numpy(nib_volume.transpose())
-    volume.set_voxel_size(nib_dims)
+    nib_dims = tuple(float(f) for f in nib_volume.header['pixdim'][1:4])
+    nib_volume = hu2mu(nib_volume.get_fdata())
+    nib_volume[nib_volume < 0] = 0
+    volume = torch.from_numpy(nib_volume.transpose()).float().cuda()
 
-    num_views = 360
+    radon.volume = Volume3D(
+        depth=volume.shape[0],
+        height=volume.shape[1],
+        width=volume.shape[2],
+        voxel_size=nib_dims,
+    )
 
-    setup = ctl.AcquisitionSetup(system, num_views)
-    setup.apply_preparation_protocol(ctl.protocols.AxialScanTrajectory())
-
-    projector = ctl.ocl.RayCasterProjector()
-    projections = projector.configure_and_project(setup, volume).numpy()
+    projections = radon.forward(volume[None, None])
+    if projections.isnan().any():
+        print(path_to_nifti)
+        print(volume.isnan().any())
+        projections.nan_to_num_(0)
 
     os.makedirs(projections_path, exist_ok=True)
-    file_name = path_to_nifti[path_to_nifti.rfind(os.sep)+1:]
-    img = nib.Nifti1Image(projections[:, 0].transpose(), np.eye(4))
-    nib.save(img, f"{projections_path}/{file_name}")
+    file_name = path_to_nifti[path_to_nifti.rfind(os.sep)+1:].split('.', 1)[0]
+    h5 = h5py.File(pjoin(projections_path, f'{file_name}.h5'), "w")
+    h5.create_dataset('projections', data=projections[0, 0].cpu().numpy())
 
 
 def create_all_projections():
-    data_dir = DATA_DIRS['datasets']
-    for data_file in sorted(os.listdir(data_dir)):
-        print(f'processing: {data_file}')
+    data_dir = '/mnt/nvme2/lungs/lungs3d/'
+    for data_file in tqdm([f for f in sorted(os.listdir(data_dir)) if f.endswith('.nii.gz')]):
         create_projections(
-            create_system(),
+            create_radon(),
             pjoin(data_dir, data_file),
             'projections',
         )
